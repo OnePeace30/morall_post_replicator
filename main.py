@@ -2,15 +2,27 @@ from models import SmPost, CMScrapedPostv2, CMScrapingAccounts, CMScrapingPostGr
 from util import Database
 from datetime import datetime as dt
 import sqlalchemy as sa
+import logging
+from logging.handlers import TimedRotatingFileHandler
 
-    
+
+logger = logging.getLogger("replicator")
+logger.setLevel(logging.INFO)
+
+handler = TimedRotatingFileHandler(f"replicator.log", interval=1, backupCount=3, when='d')
+formatter = logging.Formatter("%(name)s %(asctime)s %(levelname)s %(message)s")
+
+handler.setFormatter(formatter)
+logger.addHandler(handler)
 
 
 if __name__ == '__main__':
     db = Database()
     max_value_id = 9223372036854775807
     posts = db.master_session.query(SmPost).filter(SmPost.date_added_to_db > dt.now().date()).all()
+    logger.info(f"New posts - {len(posts)}")
     for post in posts:
+        logger.info(f'post - {post.id}')
         curr_id = max_value_id - post.id
         acc, created = CMScrapingAccounts.get_or_create(
             db.slave_session,
@@ -19,6 +31,7 @@ if __name__ == '__main__':
                 "network": post.network
             }, name=post.author_name, network=post.network
         )
+        logger.info('Account {acc.name} is created {created}')
         cm_post, created = CMScrapedPostv2.get_or_create(
             db.slave_session,
             defaults={
@@ -35,6 +48,7 @@ if __name__ == '__main__':
                 "social_account_id": acc.id,
             }, id=max_value_id - post.id
         )
+        logger.info('Post {cm_post.id} is created {created}')
         if not created:
             continue
         CMScrapingPostGroups.get_or_create(
@@ -43,5 +57,6 @@ if __name__ == '__main__':
         )
         cm_word = db.slave_session.query(CMScrapedWords).filter(sa.and_(CMScrapedWords.word == post.word.word, CMScrapedWords.user_group == 496)).one_or_none()
         if cm_word:
+            logger.info(f'Link post {cm_post.id} to word {cm_word.id}')
             cm_word.posts = [*cm_word.posts, cm_post]
             db.slave_session.commit()
