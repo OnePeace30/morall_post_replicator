@@ -41,7 +41,7 @@ slave_engine = sa.create_engine(
     f'postgresql://{DB_USER}:{DB_PWD}@{DB_HOST}:{DB_PORT}/{DB_NAME}',
     echo=True,
 )
-logger = logging.getLogger('gneesrss')
+logger = logging.getLogger('replicator')
 
 
 
